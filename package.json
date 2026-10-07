@@ -1,0 +1,7 @@
+{
+  "name": "graph-digitizer-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node --test tests/core.test.js", "test:browser": "node tests/browser-check.cjs"}
+}

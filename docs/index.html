@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>graph-digitizer web</title>
+  <meta name="description" content="グラフ画像から曲線を数値化し、CSVとして保存・比較するブラウザーツール。">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23132843'/%3E%3Cpath d='M6 6v20h20M8 23l7-5 4-8 7-4' fill='none' stroke='%2351bdff' stroke-width='2'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="app-header"><div><span class="brand-mark" aria-hidden="true">∿</span><strong>graph-digitizer <span>web</span></strong></div><span class="privacy">画像・CSVはブラウザー内で処理</span></header>
+<main>
+  <nav class="tabs" role="tablist" aria-label="作業モード">
+    <button id="acquireTab" class="active" role="tab" aria-selected="true" aria-controls="acquire">CSV取得</button>
+    <button id="compareTab" role="tab" aria-selected="false" aria-controls="compare">CSV描画</button>
+  </nav>
+  <section id="acquire" role="tabpanel" aria-labelledby="acquireTab">
+    <div class="toolbar">
+      <label class="button primary" for="imageFile">画像を開く</label><input class="file-input" id="imageFile" type="file" accept="image/png,image/jpeg">
+      <span id="imageName" class="filename">PNG / JPEG</span>
+      <button id="undo">最後の点を戻す</button><button id="deletePoint">選択点を削除</button><button id="saveCSV" class="primary">CSV保存</button>
+    </div>
+    <div class="calibration">
+      <label>x最小の軸値<input id="x_min" type="number" value="0" step="any"><span id="ref-x_min">未指定</span></label>
+      <label>x最大の軸値<input id="x_max" type="number" value="100" step="any"><span id="ref-x_max">未指定</span></label>
+      <label>y最小の軸値<input id="y_min" type="number" value="0" step="any"><span id="ref-y_min">未指定</span></label>
+      <label>y最大の軸値<input id="y_max" type="number" value="1" step="any"><span id="ref-y_max">未指定</span></label>
+    </div>
+    <div class="controls">
+      <label>クリック対象<select id="clickMode"><option value="x_min">x軸最小点</option><option value="x_max">x軸最大点</option><option value="y_min">y軸最小点</option><option value="y_max">y軸最大点</option><option value="curve">曲線のデータ点</option></select></label>
+      <label>x軸名・単位<input id="xLabel" value="Strain [%]"></label><label>y軸名・単位<input id="yLabel" value="Stress [MPa]"></label>
+    </div>
+    <div class="controls extraction-controls">
+      <button id="detect" class="primary">曲線を自動検出</button>
+      <label>途切れの接続距離 [px]<input id="gap" type="number" min="0" max="100" step="1" value="12"></label>
+      <label class="candidate">検出候補<select id="candidate"><option value="">未検出</option></select></label>
+      <button id="applyCandidate">選択候補を取得点に反映</button>
+    </div>
+    <p class="units">px：元画像の画素の位置・距離。%：元の試料長に対する変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。</p>
+    <div class="workspace">
+      <article class="panel image-panel">
+        <div class="panel-heading"><h2>元画像</h2><div class="zoom-controls"><button id="zoomOut" aria-label="画像を縮小">−</button><output id="zoomValue">100 %</output><button id="zoomIn" aria-label="画像を拡大">＋</button><button id="fitImage">全体表示</button></div></div>
+        <div id="imageViewport"><p id="imageEmpty" class="empty">画像を開き、軸の基準点を指定する。</p><canvas id="imageCanvas" hidden aria-label="グラフ画像。選択した対象の位置をクリックして指定する。"></canvas></div>
+      </article>
+      <div class="results">
+        <article class="panel"><div class="panel-heading"><h2>再描画</h2><span id="pointCount">0 点</span></div><div class="plot-wrap"><canvas id="acquirePlot" aria-label="取得点の再描画グラフ"></canvas></div></article>
+        <article class="panel points-panel"><div class="panel-heading"><h2>取得点</h2><span>行を選ぶとオレンジで表示</span></div><div class="table-scroll"><table><thead><tr><th>番号</th><th>u [px]</th><th>v [px]</th><th id="tableX">Strain [%]</th><th id="tableY">Stress [MPa]</th></tr></thead><tbody id="pointRows"></tbody></table></div></article>
+      </div>
+    </div>
+  </section>
+  <section id="compare" role="tabpanel" aria-labelledby="compareTab" hidden>
+    <div class="toolbar"><label class="button primary" for="csvFiles">CSVを追加（複数選択可）</label><input class="file-input" id="csvFiles" type="file" accept=".csv,text/csv" multiple><label class="toggle"><input id="showPoints" type="checkbox">点を表示</label></div>
+    <div class="controls"><label>x軸名・単位<input id="compareX" value="Strain [%]"></label><label>y軸名・単位<input id="compareY" value="Stress [MPa]"></label></div>
+    <p class="units">単位の換算は行わない。各CSVの単位とひずみ・応力の定義をそろえて比較する。%：変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。</p>
+    <div class="compare-workspace"><aside class="panel"><div class="panel-heading"><h2>読み込んだCSV</h2></div><p id="csvEmpty" class="empty">比較するCSVを追加する。</p><ul id="curveList"></ul></aside><article class="panel compare-plot-panel"><div class="panel-heading"><h2>曲線の比較</h2><span id="curveCount">0 曲線</span></div><div class="plot-wrap"><canvas id="comparePlot" aria-label="CSV曲線の比較グラフ"></canvas></div><div id="legend" class="legend"></div></article></div>
+  </section>
+  <p id="status" class="status" role="status" aria-live="polite">画像読込後、軸値を入力し、対応する目盛位置を指定する。</p>
+  <details class="help"><summary>使い方・抽出条件</summary><p>両軸が線形目盛の画像を対象とする。軸の最小点・最大点は文字ではなく目盛の位置を指定する。画像はホイールまたは＋／−で拡大・縮小できる。拡大後はスクロールで移動する。</p><p>自動検出は白背景の線を対象とする。候補は元画像と照合してから保存する。同色の交差線、文字や誤差棒が接触する線は混ざる場合がある。途切れた区間には点を生成しないが、再描画では取得点を直線で結ぶ。欠損区間の測定値を復元したことにはならない。</p><p>CSVはx,y列、UTF-8 BOM付きで保存する。行順を保持し、CSVに単位や校正情報は含めない。CSV描画での点表示は初期状態でOFFである。再読み込みやタブを閉じる前にCSVを保存する。</p></details>
+</main>
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>
