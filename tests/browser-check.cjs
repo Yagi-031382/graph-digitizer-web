@@ -61,10 +61,64 @@ const root=path.resolve(__dirname,'../docs');
     await page.waitForFunction(()=>document.getElementById('status').classList.contains('error'));assert.equal(await page.locator('#curveList li').count(),2);
     await page.locator('#curveList button').first().click();assert.equal(await page.locator('#curveList li').count(),1);
     await page.locator('#acquireTab').click();assert.ok(await page.locator('#pointRows tr').count()>150);
+    await page.locator('#compareTab').click();
+    assert.equal(await page.locator('#compareXMode').inputValue(),'auto');
+    assert.equal(await page.locator('#compareYMode').inputValue(),'auto');
+    assert.ok(await page.locator('#compareXMin').isDisabled());
+    assert.ok(await page.locator('#compareXMax').isDisabled());
+    await page.locator('#curveList button').first().click();
+    await page.locator('#csvFiles').setInputFiles({name:'bounds.csv',mimeType:'text/csv',buffer:Buffer.from('x,y\n-10,-10\n0,0\n10,10\n20,20\n')});
+    for(const axis of ['X','Y'])await page.locator('#compare'+axis+'Mode').selectOption('manual');
+    await page.locator('#compareXMin').fill('2');await page.locator('#compareXMax').fill('8');
+    await page.locator('#compareYMin').fill('1');await page.locator('#compareYMax').fill('9');
+    assert.ok(await page.locator('#rangeError').isHidden());
+    const verifyBounds=async ranges=>page.evaluate(async ranges=>{
+      const {drawPlot}=await import('./js/plot.js');
+      const canvas=document.getElementById('comparePlot'),actual=canvas.toDataURL();
+      const layout=drawPlot(canvas,[{points:[[-10,-10],[0,0],[10,10],[20,20]],color:'#1565c0'}],document.getElementById('compareX').value,document.getElementById('compareY').value,{showPoints:document.getElementById('showPoints').checked,ranges});
+      const same=actual===canvas.toDataURL();
+      const ratio=devicePixelRatio||1,data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+      let inside=0,outside=0;
+      for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++){
+        const i=(y*canvas.width+x)*4;
+        if(data[i]===21&&data[i+1]===101&&data[i+2]===192){
+          if(x/ratio<layout.left||x/ratio>layout.right||y/ratio<layout.top||y/ratio>layout.bottom)outside++;else inside++;
+        }
+      }
+      return {same,inside,outside,bounds:layout.bounds};
+    },ranges);
+    const manual=await verifyBounds({x:{mode:'manual',min:2,max:8},y:{mode:'manual',min:1,max:9}});
+    assert.ok(manual.same);assert.ok(manual.inside>10);assert.equal(manual.outside,0);
+    await page.locator('#showPoints').check();
+    assert.equal((await verifyBounds({x:{mode:'manual',min:2,max:8},y:{mode:'manual',min:1,max:9}})).outside,0);
+    for(const axis of ['X','Y']){
+      const min=page.locator('#compare'+axis+'Min'),zero=page.locator('#compare'+axis+'Zero');
+      const previous=await min.inputValue();await zero.check();assert.ok(await min.isDisabled());assert.equal(await min.inputValue(),'0');
+      assert.ok((await verifyBounds({x:{mode:'manual',min:2,max:8,zero:axis==='X'},y:{mode:'manual',min:1,max:9,zero:axis==='Y'}})).same);
+      await zero.uncheck();assert.ok(await min.isEnabled());assert.equal(await min.inputValue(),previous);
+    }
+    for(const axis of ['X','Y']){
+      const max=page.locator('#compare'+axis+'Max'),min=page.locator('#compare'+axis+'Min'),previous=await max.inputValue();
+      for(const invalid of [await min.inputValue(),'0','', '1e309']){
+        await max.fill(invalid);assert.ok(await page.locator('#rangeError').isVisible());assert.match(await page.locator('#rangeError').textContent(),new RegExp(axis.toLowerCase()+'軸'));
+      }
+      await max.fill(previous);await min.fill('');assert.ok(await page.locator('#rangeError').isVisible());
+      await page.locator('#compare'+axis+'Zero').check();assert.ok(await page.locator('#rangeError').isHidden());
+      await page.locator('#compare'+axis+'Zero').uncheck();assert.equal(await min.inputValue(),'');assert.ok(await page.locator('#rangeError').isVisible());
+      await min.fill(axis==='X'?'2':'1');assert.ok(await page.locator('#rangeError').isHidden());
+    }
+    await page.locator('#compareX').fill('Time [s]');await page.locator('#compareY').fill('Force [N]');
+    assert.ok((await verifyBounds({x:{mode:'manual',min:2,max:8},y:{mode:'manual',min:1,max:9}})).same);
+    for(const axis of ['X','Y'])await page.locator('#compare'+axis+'Mode').selectOption('auto');
+    assert.ok((await verifyBounds({})).same);assert.ok(await page.locator('#rangeError').isHidden());
+    await page.locator('#compareXZero').check();assert.ok((await verifyBounds({x:{mode:'auto',zero:true}})).same);
+    await page.locator('#compareXZero').uncheck();
+    await page.locator('#acquireTab').click();assert.ok(await page.locator('#pointRows tr').count()>150);
+    await page.locator('#compareTab').click();assert.equal(await page.locator('#curveList li').count(),1);
     await page.screenshot({path:path.resolve(__dirname,'../test-results-desktop.png'),fullPage:true});
     await page.setViewportSize({width:390,height:844});await page.locator('#compareTab').click();await page.waitForTimeout(100);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:path.resolve(__dirname,'../test-results-mobile.png'),fullPage:true});
-    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, calibration, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout.');
+    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, calibration, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout, manual/automatic axis bounds, zero toggles, validation, clipping, custom units.');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

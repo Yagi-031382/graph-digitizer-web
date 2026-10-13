@@ -133,9 +133,40 @@ $('detect').onclick=()=>{
   }catch(error){status(error.message,true);}
 };
 
+const storedMinimum={X:'0',Y:'0'};
+function comparisonRanges(){
+  return Object.fromEntries(['X','Y'].map(axis=>{
+    const prefix='compare'+axis,mode=$(prefix+'Mode').value,zero=$(prefix+'Zero').checked;
+    const number=id=>$(id).value.trim()===''?NaN:Number($(id).value);
+    return [axis.toLowerCase(),{mode,zero,min:zero?0:number(prefix+'Min'),max:number(prefix+'Max')}];
+  }));
+}
+function updateRangeControls(axis){
+  const prefix='compare'+axis,automatic=$(prefix+'Mode').value==='auto';
+  $(prefix+'Min').disabled=automatic||$(prefix+'Zero').checked;
+  $(prefix+'Max').disabled=automatic;
+}
+for(const axis of ['X','Y']){
+  const prefix='compare'+axis;
+  $(prefix+'Zero').addEventListener('change',()=>{
+    const input=$(prefix+'Min');
+    if($(prefix+'Zero').checked){storedMinimum[axis]=input.value;input.value='0';}
+    else input.value=storedMinimum[axis];
+    updateRangeControls(axis);renderComparison();
+  });
+  $(prefix+'Mode').addEventListener('change',()=>{updateRangeControls(axis);renderComparison();});
+  for(const suffix of ['Min','Max'])$(prefix+suffix).addEventListener('input',renderComparison);
+}
+
 function renderComparison(){
   const curves=[...state.curves.values()].map((c,index)=>({...c,color:curveColor(index,state.curves.size)}));
-  drawPlot($('comparePlot'),curves,$('compareX').value,$('compareY').value,{showPoints:$('showPoints').checked});
+  try{
+    drawPlot($('comparePlot'),curves,$('compareX').value,$('compareY').value,{showPoints:$('showPoints').checked,ranges:comparisonRanges()});
+    $('rangeError').hidden=true;$('rangeError').textContent='';
+  }catch(error){
+    const canvas=$('comparePlot');canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+    $('rangeError').textContent=error.message;$('rangeError').hidden=false;
+  }
   $('curveCount').textContent=`${curves.length} 曲線`;$('csvEmpty').hidden=!!curves.length;
   $('curveList').replaceChildren();$('legend').replaceChildren();
   curves.forEach(curve=>{

@@ -51,7 +51,22 @@
   <section id="compare" role="tabpanel" aria-labelledby="compareTab" hidden>
     <div class="toolbar"><label class="button primary" for="csvFiles">CSVを追加（複数選択可）</label><input class="file-input" id="csvFiles" type="file" accept=".csv,text/csv" multiple><label class="toggle"><input id="showPoints" type="checkbox">点を表示</label></div>
     <div class="controls"><label>x軸名・単位<input id="compareX" value="Strain [%]"></label><label>y軸名・単位<input id="compareY" value="Stress [MPa]"></label></div>
-    <p class="units">単位の換算は行わない。各CSVの単位とひずみ・応力の定義をそろえて比較する。%：変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。</p>
+    <div class="axis-ranges">
+      <fieldset><legend>x軸の表示範囲</legend>
+        <label>範囲<select id="compareXMode"><option value="auto">自動</option><option value="manual">指定</option></select></label>
+        <label>最小値<input id="compareXMin" type="number" step="any" value="0" disabled></label>
+        <label>最大値<input id="compareXMax" type="number" step="any" value="100" disabled></label>
+        <label class="toggle"><input id="compareXZero" type="checkbox">最小値を0にする</label>
+      </fieldset>
+      <fieldset><legend>y軸の表示範囲</legend>
+        <label>範囲<select id="compareYMode"><option value="auto">自動</option><option value="manual">指定</option></select></label>
+        <label>最小値<input id="compareYMin" type="number" step="any" value="0" disabled></label>
+        <label>最大値<input id="compareYMax" type="number" step="any" value="1" disabled></label>
+        <label class="toggle"><input id="compareYZero" type="checkbox">最小値を0にする</label>
+      </fieldset>
+    </div>
+    <p id="rangeError" class="status error" role="alert" hidden></p>
+    <p class="units">単位の換算は行わない。各CSVの単位とひずみ・応力の定義をそろえて比較する。%：元の試料長に対する変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。</p>
     <div class="compare-workspace"><aside class="panel"><div class="panel-heading"><h2>読み込んだCSV</h2></div><p id="csvEmpty" class="empty">比較するCSVを追加する。</p><ul id="curveList"></ul></aside><article class="panel compare-plot-panel"><div class="panel-heading"><h2>曲線の比較</h2><span id="curveCount">0 曲線</span></div><div class="plot-wrap"><canvas id="comparePlot" aria-label="CSV曲線の比較グラフ"></canvas></div><div id="legend" class="legend"></div></article></div>
   </section>
   <p id="status" class="status" role="status" aria-live="polite">画像読込後、軸値を入力し、対応する目盛位置を指定する。</p>

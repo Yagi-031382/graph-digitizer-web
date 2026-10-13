@@ -46,3 +46,21 @@ test('connected fragments respect gap setting and extraction grid removal',()=>{
   const grid=image();for(let x=20;x<=320;x++){const p=(100*grid.width+x)*4;grid.data[p]=grid.data[p+1]=grid.data[p+2]=130;}
   assert.equal(extractCurves(grid).length,1);
 });
+
+// Display limits affect the plot only; source CSV points remain untouched.
+import {resolvePlotBounds} from '../docs/js/plot.js';
+test('manual display bounds, automatic fallback and independent zero minima',()=>{
+  const series=[{points:[[-10,-5],[10,15]]}],original=JSON.stringify(series);
+  const automatic=resolvePlotBounds(series);
+  assert.deepEqual(automatic,{xmin:-11,xmax:11,ymin:-6,ymax:16,hasData:true});
+  assert.deepEqual(resolvePlotBounds(series,{x:{mode:'manual',min:2,max:8},y:{mode:'manual',min:-2,max:9,zero:true}}),
+    {xmin:2,xmax:8,ymin:0,ymax:9,hasData:true});
+  assert.equal(resolvePlotBounds(series,{x:{mode:'auto',zero:true}}).xmin,0);
+  assert.equal(JSON.stringify(series),original);
+});
+test('display bounds reject empty/nonfinite, equal, reversed and overflowing ranges',()=>{
+  for(const [min,max] of [[NaN,1],[0,NaN],[0,Infinity],[-Infinity,1],[1,1],[2,1],[-1e308,1e308]])
+    assert.throws(()=>resolvePlotBounds([],{x:{mode:'manual',min,max}}),/x軸/);
+  assert.throws(()=>resolvePlotBounds([],{y:{mode:'manual',min:NaN,max:0,zero:true}}),/y軸/);
+  assert.equal(resolvePlotBounds([],{y:{mode:'manual',min:NaN,max:2,zero:true}}).ymin,0);
+});

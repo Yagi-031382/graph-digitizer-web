@@ -9,12 +9,7 @@ function tickValues(min,max,target=5) {
   return ticks;
 }
 const format=value=>Number(value.toPrecision(5)).toString();
-// Input: canvas, named graph-coordinate series, axis labels, marker flag, selected row.
-// Output: chart drawing and selected orange marker; returns layout coordinates for verification.
-export function drawPlot(canvas,series,xLabel,yLabel,{showPoints=true,selected=null}={}) {
-  const width=Math.max(250,canvas.clientWidth),height=Math.max(180,canvas.clientHeight),ratio=window.devicePixelRatio||1;
-  canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
-  const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
+export function resolvePlotBounds(series,ranges={}) {
   let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
   for(const curve of series)for(const [x,y] of curve.points){xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);ymin=Math.min(ymin,y);ymax=Math.max(ymax,y);}
   const hasData=Number.isFinite(xmin);
@@ -22,6 +17,26 @@ export function drawPlot(canvas,series,xLabel,yLabel,{showPoints=true,selected=n
   const dx=(xmax-xmin)||Math.abs(xmin)*.2||1,dy=(ymax-ymin)||Math.abs(ymin)*.2||1;
   if(xmin===xmax){xmin-=dx/2;xmax+=dx/2;}else{xmin-=dx*.05;xmax+=dx*.05;}
   if(ymin===ymax){ymin-=dy/2;ymax+=dy/2;}else{ymin-=dy*.05;ymax+=dy*.05;}
+  for(const axis of ['x','y']) {
+    const setting=ranges[axis];
+    if(!setting)continue;
+    let min=axis==='x'?xmin:ymin,max=axis==='x'?xmax:ymax;
+    if(setting.mode==='manual'){min=setting.min;max=setting.max;}
+    if(setting.zero)min=0;
+    if(!Number.isFinite(min)||!Number.isFinite(max)||max<=min||!Number.isFinite(max-min))
+      throw new Error(`${axis}軸：有限の最小値・最大値を入力し、最大値を最小値より大きくしてください。`);
+    if(axis==='x'){xmin=min;xmax=max;}else{ymin=min;ymax=max;}
+  }
+  return {xmin,xmax,ymin,ymax,hasData};
+}
+
+// Input: canvas, named graph-coordinate series, axis labels, marker flag, selected row.
+// Output: chart drawing and selected orange marker; returns layout coordinates for verification.
+export function drawPlot(canvas,series,xLabel,yLabel,{showPoints=true,selected=null,ranges={}}={}) {
+  const width=Math.max(250,canvas.clientWidth),height=Math.max(180,canvas.clientHeight),ratio=window.devicePixelRatio||1;
+  canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
+  const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
+  const {xmin,xmax,ymin,ymax,hasData}=resolvePlotBounds(series,ranges);
   const xticks=tickValues(xmin,xmax),yticks=tickValues(ymin,ymax);
   ctx.font='12px system-ui';
   const left=Math.max(55,...yticks.map(v=>ctx.measureText(format(v)).width+20));
@@ -44,5 +59,5 @@ export function drawPlot(canvas,series,xLabel,yLabel,{showPoints=true,selected=n
   }
   ctx.restore();
   if(!hasData){ctx.fillStyle='#56677b';ctx.font='14px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('データを取得・読み込みすると表示される。',(left+right)/2,(top+bottom)/2);}
-  return {map,width,height};
+  return {map,width,height,bounds:{xmin,xmax,ymin,ymax},left,right,top,bottom};
 }
