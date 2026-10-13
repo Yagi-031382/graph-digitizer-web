@@ -142,9 +142,9 @@ function comparisonRanges(){
   }));
 }
 function updateRangeControls(axis){
-  const prefix='compare'+axis,automatic=$(prefix+'Mode').value==='auto';
-  $(prefix+'Min').disabled=automatic||$(prefix+'Zero').checked;
-  $(prefix+'Max').disabled=automatic;
+  const prefix='compare'+axis;
+  $(prefix+'Min').disabled=$(prefix+'Zero').checked;
+  $(prefix+'Max').disabled=false;
 }
 for(const axis of ['X','Y']){
   const prefix='compare'+axis;
@@ -155,7 +155,10 @@ for(const axis of ['X','Y']){
     updateRangeControls(axis);renderComparison();
   });
   $(prefix+'Mode').addEventListener('change',()=>{updateRangeControls(axis);renderComparison();});
-  for(const suffix of ['Min','Max'])$(prefix+suffix).addEventListener('input',renderComparison);
+  for(const suffix of ['Min','Max'])$(prefix+suffix).addEventListener('input',()=>{
+    $(prefix+'Mode').value='manual';
+    renderComparison();
+  });
 }
 
 function renderComparison(){

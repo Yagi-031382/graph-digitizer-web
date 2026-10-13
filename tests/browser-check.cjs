@@ -64,13 +64,20 @@ const root=path.resolve(__dirname,'../docs');
     await page.locator('#compareTab').click();
     assert.equal(await page.locator('#compareXMode').inputValue(),'auto');
     assert.equal(await page.locator('#compareYMode').inputValue(),'auto');
-    assert.ok(await page.locator('#compareXMin').isDisabled());
-    assert.ok(await page.locator('#compareXMax').isDisabled());
+    assert.ok(await page.locator('#compareXMin').isEnabled());
+    assert.ok(await page.locator('#compareXMax').isEnabled());
     await page.locator('#curveList button').first().click();
     await page.locator('#csvFiles').setInputFiles({name:'bounds.csv',mimeType:'text/csv',buffer:Buffer.from('x,y\n-10,-10\n0,0\n10,10\n20,20\n')});
-    for(const axis of ['X','Y'])await page.locator('#compare'+axis+'Mode').selectOption('manual');
-    await page.locator('#compareXMin').fill('2');await page.locator('#compareXMax').fill('8');
-    await page.locator('#compareYMin').fill('1');await page.locator('#compareYMax').fill('9');
+    // Enter all four bounds with real keyboard events, directly from automatic mode.
+    async function typeBound(id,value){
+      const input=page.locator('#'+id);assert.ok(await input.isEnabled());
+      await input.focus();await input.press('ControlOrMeta+A');await input.pressSequentially(value);
+      assert.equal(await input.inputValue(),value);assert.ok(await input.evaluate(node=>node===document.activeElement));
+    }
+    await typeBound('compareXMin','2');assert.equal(await page.locator('#compareXMode').inputValue(),'manual');
+    assert.equal(await page.locator('#compareYMode').inputValue(),'auto');
+    await typeBound('compareXMax','8');await typeBound('compareYMin','1');await typeBound('compareYMax','9');
+    assert.equal(await page.locator('#compareYMode').inputValue(),'manual');
     assert.ok(await page.locator('#rangeError').isHidden());
     const verifyBounds=async ranges=>page.evaluate(async ranges=>{
       const {drawPlot}=await import('./js/plot.js');
@@ -113,12 +120,18 @@ const root=path.resolve(__dirname,'../docs');
     assert.ok((await verifyBounds({})).same);assert.ok(await page.locator('#rangeError').isHidden());
     await page.locator('#compareXZero').check();assert.ok((await verifyBounds({x:{mode:'auto',zero:true}})).same);
     await page.locator('#compareXZero').uncheck();
+    await typeBound('compareXMin','-2.5');
+    assert.equal(await page.locator('#compareXMode').inputValue(),'manual');
+    assert.equal(await page.locator('#compareYMode').inputValue(),'auto');
+    assert.ok((await verifyBounds({x:{mode:'manual',min:-2.5,max:8}})).same);
+    await page.locator('#compareXMode').selectOption('auto');
+    assert.ok((await verifyBounds({})).same);
     await page.locator('#acquireTab').click();assert.ok(await page.locator('#pointRows tr').count()>150);
     await page.locator('#compareTab').click();assert.equal(await page.locator('#curveList li').count(),1);
     await page.screenshot({path:path.resolve(__dirname,'../test-results-desktop.png'),fullPage:true});
     await page.setViewportSize({width:390,height:844});await page.locator('#compareTab').click();await page.waitForTimeout(100);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:path.resolve(__dirname,'../test-results-mobile.png'),fullPage:true});
-    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, calibration, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout, manual/automatic axis bounds, zero toggles, validation, clipping, custom units.');
+    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, calibration, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout, keyboard entry from automatic mode, manual/automatic axis bounds, zero toggles, validation, clipping, custom units.');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
