@@ -64,3 +64,45 @@ test('display bounds reject empty/nonfinite, equal, reversed and overflowing ran
   assert.throws(()=>resolvePlotBounds([],{y:{mode:'manual',min:NaN,max:0,zero:true}}),/y軸/);
   assert.equal(resolvePlotBounds([],{y:{mode:'manual',min:NaN,max:2,zero:true}}).ymin,0);
 });
+
+import {samplingGrid} from '../docs/js/sampling-grid.js';
+function latticeImage(){
+  const width=41,height=41,data=new Uint8ClampedArray(width*height*4).fill(255);
+  const references={x_min:[5,35],x_max:[35,35],y_min:[5,35],y_max:[5,5]};
+  const dot=(x,y,color)=>{const i=(y*width+x)*4;data.set([...color,255],i);};
+  for(const [x,y] of [[5,35],[15,25],[25,15],[35,5],[20,20]])dot(x,y,[255,0,0]);
+  dot(15,15,[0,0,255]);dot(25,25,[0,0,255]);
+  return {data,width,height,references,values,mode:'grid',stepX:10,stepY:10,dot};
+}
+test('grid sampling includes ink at origin, exact intersections and separate colors without interpolating',()=>{
+  const sample=latticeImage(),before=sample.data.slice(),result=extractCurves(sample);
+  const red=result.find(c=>c.name.startsWith('赤')),blue=result.find(c=>c.name.startsWith('青'));
+  assert.deepEqual(red.points,[[5,35],[15,25],[25,15],[35,5]]);
+  assert.deepEqual(blue.points,[[15,15],[25,25]]);
+  assert.deepEqual(toGraph(red.points[0],sample.references,values),[0,0]);
+  assert.deepEqual(sample.data,before);
+  const dense=extractCurves({...sample,stepX:5,stepY:5}).find(c=>c.name.startsWith('赤'));
+  assert.ok(dense.points.some(([u,v])=>u===20&&v===20));
+  sample.data.fill(255);assert.deepEqual(extractCurves(sample),[]);
+});
+test('grid steps are independent, support reversed/subpixel calibration, and omit off-grid maxima',()=>{
+  const sample=latticeImage(),grid=samplingGrid({...sample,stepX:12,stepY:7});
+  assert.deepEqual(grid.xs,[5,17,29]);assert.deepEqual(grid.ys,[35,28,21,14,7]);
+  const reversed={x_min:[35,5],x_max:[5,5],y_min:[35,5],y_max:[35,35]};
+  assert.deepEqual(samplingGrid({...sample,references:reversed}).xs,[35,25,15,5]);
+  const refs={x_min:[5.2,34.8],x_max:[35.2,34.8],y_min:[5.2,34.8],y_max:[5.2,4.8]};
+  const red=extractCurves({...sample,references:refs}).find(c=>c.name.startsWith('赤'));
+  assert.deepEqual(red.points[0],[5.2,34.8]);
+  assert.ok(red.points.every(([x,y])=>Math.abs((x-5.2)/10-Math.round((x-5.2)/10))<1e-8&&Math.abs((34.8-y)/10-Math.round((34.8-y)/10))<1e-8));
+});
+test('grid rejects invalid spacing and excessive samples; black origin survives axis removal',()=>{
+  const sample=latticeImage();
+  for(const step of [0,-1,1.5,NaN,Infinity,10001]){
+    assert.throws(()=>extractCurves({...sample,stepX:step}),/格子間隔/);
+    assert.throws(()=>extractCurves({...sample,stepY:step}),/格子間隔/);
+  }
+  assert.throws(()=>samplingGrid({width:2000,height:2000,references:{x_min:[0,1999],x_max:[1999,1999],y_min:[0,1999],y_max:[0,0]},stepX:1,stepY:1}),/100万/);
+  sample.data.fill(255);
+  for(let i=5;i<=35;i++){sample.dot(i,35,[0,0,0]);sample.dot(5,i,[0,0,0]);}
+  assert.deepEqual(extractCurves(sample)[0].points,[[5,35]]);
+});

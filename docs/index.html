@@ -31,11 +31,19 @@
       <label>x軸名・単位<input id="xLabel" value="Strain [%]"></label><label>y軸名・単位<input id="yLabel" value="Stress [MPa]"></label>
     </div>
     <div class="controls extraction-controls">
+      <label>抽出方式<select id="extractionMode"><option value="auto">曲線を自動抽出</option><option value="grid">格子サンプリング</option></select></label>
       <button id="detect" class="primary">曲線を自動検出</button>
       <label>途切れの接続距離 [px]<input id="gap" type="number" min="0" max="100" step="1" value="12"></label>
       <label class="candidate">検出候補<select id="candidate"><option value="">未検出</option></select></label>
       <button id="applyCandidate">選択候補を取得点に反映</button>
     </div>
+    <div id="gridControls" class="controls" hidden>
+      <label>横方向の間隔 [px]<input id="gridStepX" type="number" min="1" max="10000" step="1" value="10"></label>
+      <label>縦方向の間隔 [px]<input id="gridStepY" type="number" min="1" max="10000" step="1" value="10"></label>
+      <label class="toggle"><input id="gridPreview" type="checkbox" checked>格子プレビュー</label>
+    </div>
+    <p id="gridHelp" class="units" hidden>最小軸の交点を起点に、校正範囲の格子交点だけをサンプリングする。原点も画素を調べ、白背景なら点を生成しない。格子交点を通らない細線は取得できない。間隔を狭くして元画像と照合する。</p>
+    <p id="gridError" class="status error" role="alert" hidden></p>
     <p class="units">画像上の縦線2本（x最小・x最大）と横線2本（y最小・y最大）をドラッグして、対応する目盛に合わせる。線の交点を基準座標に使用する。矢印キーで1 px、Shift＋矢印で10 px移動できる。点を取得するときは「画像の操作」を切り替える。</p>
     <p class="units">px：元画像の画素の位置・距離。%：元の試料長に対する変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。</p>
     <div class="workspace">
