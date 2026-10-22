@@ -1,7 +1,7 @@
 import {keys,validateCalibration,toGraph,parseCSV,makeCSV} from './core.js';
 import {drawPlot,curveColor} from './plot.js';
 const $=id=>document.getElementById(id);
-const state={image:null,name:'',source:null,references:{},points:[],selected:null,candidates:[],zoom:1,dirty:false,revision:0,curves:new Map(),busy:false};
+const state={image:null,name:'',source:null,references:{},axes:null,points:[],selected:null,candidates:[],zoom:1,dirty:false,revision:0,curves:new Map(),busy:false};
 let worker=null,jobRevision=0,jobId=0;
 
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
@@ -16,7 +16,7 @@ function renderImage(){
   ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(state.image,0,0);
   const radius=4/state.zoom;ctx.font=`${12/state.zoom}px system-ui`;ctx.lineWidth=1/state.zoom;
   function point([u,v],label,color){ctx.fillStyle=color;ctx.beginPath();ctx.arc(u,v,radius,0,Math.PI*2);ctx.fill();if(label)ctx.fillText(label,u+6/state.zoom,v-6/state.zoom);}
-  for(const [key,p]of Object.entries(state.references))point(p,key,'#b86a00');
+  renderAxes();
   state.points.forEach((p,index)=>point(p,state.points.length<=80?String(index+1):'','#d500b5'));
 }
 function renderTable(){
@@ -38,6 +38,7 @@ function setZoom(zoom){
   if(!state.image)return;
   state.zoom=Math.max(.01,Math.min(100,zoom));
   const canvas=$('imageCanvas');canvas.style.width=`${canvas.width*state.zoom}px`;canvas.style.height=`${canvas.height*state.zoom}px`;
+  $('imageStage').style.width=canvas.style.width;$('imageStage').style.height=canvas.style.height;
   $('zoomValue').textContent=`${Math.round(state.zoom*100)} %`;renderImage();
 }
 function fit(){if(state.image)setZoom(Math.min(($('imageViewport').clientWidth-4)/state.image.naturalWidth,($('imageViewport').clientHeight-4)/state.image.naturalHeight));}
@@ -63,25 +64,63 @@ $('imageFile').addEventListener('change',async event=>{
     const original=document.createElement('canvas');original.width=image.naturalWidth;original.height=image.naturalHeight;
     const ctx=original.getContext('2d',{willReadFrequently:true});ctx.fillStyle='white';ctx.fillRect(0,0,original.width,original.height);ctx.drawImage(image,0,0);
     const source=ctx.getImageData(0,0,original.width,original.height);
-    state.image=image;state.source=source;state.name=file.name;state.references={};state.points=[];state.selected=null;state.dirty=false;invalidate();
-    const canvas=$('imageCanvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;canvas.hidden=false;$('imageEmpty').hidden=true;
-    $('imageName').textContent=file.name;$('clickMode').value='x_min';fit();refresh();status('軸値を入力し、x軸最小点から順に目盛位置を指定する。');
+    state.image=image;state.source=source;state.name=file.name;state.axes={x_min:image.naturalWidth*.1,x_max:image.naturalWidth*.9,y_min:image.naturalHeight*.9,y_max:image.naturalHeight*.1};syncAxisReferences();state.points=[];state.selected=null;state.dirty=false;invalidate();
+    const canvas=$('imageCanvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;canvas.hidden=false;$('imageStage').hidden=false;$('imageEmpty').hidden=true;
+    $('imageName').textContent=file.name;$('clickMode').value='axes';fit();refresh();status('4本の校正線を目盛に合わせ、軸値を入力する。点の取得は「画像の操作」で切り替える。');
   }catch(error){status('画像を読み込めなかった：'+error.message,true);}
   finally{URL.revokeObjectURL(url);}
 });
-$('imageCanvas').addEventListener('click',event=>{
-  if(!state.image)return;
-  const rect=event.currentTarget.getBoundingClientRect(),p=[(event.clientX-rect.left)/rect.width*event.currentTarget.width,(event.clientY-rect.top)/rect.height*event.currentTarget.height];
-  const mode=$('clickMode').value;
-  if(mode==='curve'){
-    try{calibration();}catch(error){status(error.message,true);return;}
-    state.points.push(p);state.dirty=true;status(`${state.points.length} 点を取得した。`);
-  }else {
-    state.references[mode]=p;invalidate();state.dirty=state.dirty||!!state.points.length;
-    $('clickMode').value=keys[keys.indexOf(mode)+1]||'curve';
-    try{calibration();status('校正済み。手動で曲線をクリックするか、「曲線を自動検出」を押す。');}catch{status('次の軸の基準点を指定する。');}
+// Lines are kept in source-image pixels so zoom and scroll never change calibration.
+function syncAxisReferences(){
+  const a=state.axes;
+  state.references={x_min:[a.x_min,a.y_min],x_max:[a.x_max,a.y_min],y_min:[a.x_min,a.y_min],y_max:[a.x_min,a.y_max]};
+}
+function renderAxes(){
+  if(!state.axes)return;
+  $('axisOverlay').classList.toggle('acquiring',$('clickMode').value==='curve');
+  for(const key of keys){
+    const line=$('axis-'+key),vertical=key.startsWith('x'),limit=(vertical?state.source.width:state.source.height)-1;
+    line.style[vertical?'left':'top']=`${state.axes[key]*state.zoom}px`;
+    line.title=`${line.getAttribute('aria-label')}：${state.axes[key].toFixed(2)} px`;
+    line.setAttribute('role','slider');line.setAttribute('aria-orientation',vertical?'horizontal':'vertical');
+    line.setAttribute('aria-valuemin','0');line.setAttribute('aria-valuemax',String(limit));line.setAttribute('aria-valuenow',String(state.axes[key]));
+    line.tabIndex=$('clickMode').value==='axes'?0:-1;
   }
-  refresh();
+}
+function moveAxis(key,position){
+  const limit=(key.startsWith('x')?state.source.width:state.source.height)-1;
+  state.axes[key]=Math.max(0,Math.min(limit,position));syncAxisReferences();invalidate();
+  state.dirty=state.dirty||!!state.points.length;refresh();
+  try{calibration();status('校正線の交点から基準座標を更新した。取得済みの点も再計算した。');}catch(error){status(error.message,true);}
+}
+for(const key of keys){
+  const line=$('axis-'+key);let drag=null;
+  line.addEventListener('pointerdown',event=>{
+    if(event.button!==0||$('clickMode').value!=='axes')return;
+    event.preventDefault();line.focus();line.setPointerCapture(event.pointerId);
+    drag={id:event.pointerId,start:key.startsWith('x')?event.clientX:event.clientY,position:state.axes[key]};
+  });
+  line.addEventListener('pointermove',event=>{
+    if(!drag||drag.id!==event.pointerId)return;
+    const vertical=key.startsWith('x'),rect=$('imageCanvas').getBoundingClientRect();
+    const scale=vertical?state.source.width/rect.width:state.source.height/rect.height;
+    moveAxis(key,drag.position+((vertical?event.clientX:event.clientY)-drag.start)*scale);
+  });
+  for(const name of ['pointerup','pointercancel','lostpointercapture'])line.addEventListener(name,event=>{
+    if(drag?.id===event.pointerId){drag=null;if(line.hasPointerCapture(event.pointerId))line.releasePointerCapture(event.pointerId);}
+  });
+  line.addEventListener('keydown',event=>{
+    const vertical=key.startsWith('x'),negative=vertical?'ArrowLeft':'ArrowUp',positive=vertical?'ArrowRight':'ArrowDown';
+    if(![negative,positive].includes(event.key))return;
+    event.preventDefault();moveAxis(key,state.axes[key]+(event.key===negative?-1:1)*(event.shiftKey?10:1));
+  });
+}
+$('clickMode').addEventListener('change',()=>{renderAxes();status($('clickMode').value==='axes'?'校正線をドラッグして目盛に合わせる。':'曲線上をクリックして点を取得する。');});
+$('imageCanvas').addEventListener('click',event=>{
+  if(!state.image||$('clickMode').value!=='curve')return;
+  const rect=event.currentTarget.getBoundingClientRect(),p=[(event.clientX-rect.left)/rect.width*event.currentTarget.width,(event.clientY-rect.top)/rect.height*event.currentTarget.height];
+  try{calibration();}catch(error){status(error.message,true);return;}
+  state.points.push(p);state.dirty=true;status(`${state.points.length} 点を取得した。`);refresh();
 });
 keys.forEach(key=>$(key).addEventListener('input',()=>{invalidate();state.dirty=state.dirty||!!state.points.length;refresh();try{calibration();status('軸値を更新した。取得点の座標を再計算した。');}catch(error){status(error.message,true);}}));
 for(const id of ['xLabel','yLabel'])$(id).addEventListener('input',refresh);

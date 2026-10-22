@@ -27,7 +27,7 @@
       <label>y最大の軸値<input id="y_max" type="number" value="1" step="any"><span id="ref-y_max">未指定</span></label>
     </div>
     <div class="controls">
-      <label>クリック対象<select id="clickMode"><option value="x_min">x軸最小点</option><option value="x_max">x軸最大点</option><option value="y_min">y軸最小点</option><option value="y_max">y軸最大点</option><option value="curve">曲線のデータ点</option></select></label>
+      <label>画像の操作<select id="clickMode"><option value="axes">校正線を移動</option><option value="curve">曲線のデータ点を取得</option></select></label>
       <label>x軸名・単位<input id="xLabel" value="Strain [%]"></label><label>y軸名・単位<input id="yLabel" value="Stress [MPa]"></label>
     </div>
     <div class="controls extraction-controls">
@@ -36,11 +36,12 @@
       <label class="candidate">検出候補<select id="candidate"><option value="">未検出</option></select></label>
       <button id="applyCandidate">選択候補を取得点に反映</button>
     </div>
+    <p class="units">画像上の縦線2本（x最小・x最大）と横線2本（y最小・y最大）をドラッグして、対応する目盛に合わせる。線の交点を基準座標に使用する。矢印キーで1 px、Shift＋矢印で10 px移動できる。点を取得するときは「画像の操作」を切り替える。</p>
     <p class="units">px：元画像の画素の位置・距離。%：元の試料長に対する変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。</p>
     <div class="workspace">
       <article class="panel image-panel">
         <div class="panel-heading"><h2>元画像</h2><div class="zoom-controls"><button id="zoomOut" aria-label="画像を縮小">−</button><output id="zoomValue">100 %</output><button id="zoomIn" aria-label="画像を拡大">＋</button><button id="fitImage">全体表示</button></div></div>
-        <div id="imageViewport"><p id="imageEmpty" class="empty">画像を開き、軸の基準点を指定する。</p><canvas id="imageCanvas" hidden aria-label="グラフ画像。選択した対象の位置をクリックして指定する。"></canvas></div>
+        <div id="imageViewport"><p id="imageEmpty" class="empty">画像を開き、4本の校正線を目盛に合わせる。</p><div id="imageStage" hidden><canvas id="imageCanvas" aria-label="グラフ画像。校正線を移動して軸を設定する。"></canvas><div id="axisOverlay" aria-label="校正線"><button type="button" id="axis-x_min" class="calibration-line vertical" aria-label="x最小の校正線"><span>x最小</span></button><button type="button" id="axis-x_max" class="calibration-line vertical" aria-label="x最大の校正線"><span>x最大</span></button><button type="button" id="axis-y_min" class="calibration-line horizontal" aria-label="y最小の校正線"><span>y最小</span></button><button type="button" id="axis-y_max" class="calibration-line horizontal" aria-label="y最大の校正線"><span>y最大</span></button></div></div></div>
       </article>
       <div class="results">
         <article class="panel"><div class="panel-heading"><h2>再描画</h2><span id="pointCount">0 点</span></div><div class="plot-wrap"><canvas id="acquirePlot" aria-label="取得点の再描画グラフ"></canvas></div></article>
@@ -70,8 +71,8 @@
     <p class="units">単位の換算は行わない。各CSVの単位とひずみ・応力の定義をそろえて比較する。%：元の試料長に対する変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。</p>
     <div class="compare-workspace"><aside class="panel"><div class="panel-heading"><h2>読み込んだCSV</h2></div><p id="csvEmpty" class="empty">比較するCSVを追加する。</p><ul id="curveList"></ul></aside><article class="panel compare-plot-panel"><div class="panel-heading"><h2>曲線の比較</h2><span id="curveCount">0 曲線</span></div><div class="plot-wrap"><canvas id="comparePlot" aria-label="CSV曲線の比較グラフ"></canvas></div><div id="legend" class="legend"></div></article></div>
   </section>
-  <p id="status" class="status" role="status" aria-live="polite">画像読込後、軸値を入力し、対応する目盛位置を指定する。</p>
-  <details class="help"><summary>使い方・抽出条件</summary><p>両軸が線形目盛の画像を対象とする。軸の最小点・最大点は文字ではなく目盛の位置を指定する。画像はホイールまたは＋／−で拡大・縮小できる。拡大後はスクロールで移動する。</p><p>自動検出は白背景の線を対象とする。候補は元画像と照合してから保存する。同色の交差線、文字や誤差棒が接触する線は混ざる場合がある。途切れた区間には点を生成しないが、再描画では取得点を直線で結ぶ。欠損区間の測定値を復元したことにはならない。</p><p>CSVはx,y列、UTF-8 BOM付きで保存する。行順を保持し、CSVに単位や校正情報は含めない。CSV描画での点表示は初期状態でOFFである。再読み込みやタブを閉じる前にCSVを保存する。</p></details>
+  <p id="status" class="status" role="status" aria-live="polite">画像読込後、軸値を入力し、4本の校正線を対応する目盛位置に合わせる。</p>
+  <details class="help"><summary>使い方・抽出条件</summary><p>両軸が線形目盛の画像を対象とする。4本の校正線は文字ではなく、対応する目盛の位置に合わせる。x最小線とy最小線の交点が最小値の基準、x最大線とy最小線の交点がx最大、x最小線とy最大線の交点がy最大の基準になる。画像はホイールまたは＋／−で拡大・縮小できる。拡大後はスクロールで移動する。</p><p>自動検出は白背景の線を対象とする。候補は元画像と照合してから保存する。同色の交差線、文字や誤差棒が接触する線は混ざる場合がある。途切れた区間には点を生成しないが、再描画では取得点を直線で結ぶ。欠損区間の測定値を復元したことにはならない。</p><p>CSVはx,y列、UTF-8 BOM付きで保存する。行順を保持し、CSVに単位や校正情報は含めない。CSV描画での点表示は初期状態でOFFである。再読み込みやタブを閉じる前にCSVを保存する。</p></details>
 </main>
 <script type="module" src="./js/app.js"></script>
 </body>
