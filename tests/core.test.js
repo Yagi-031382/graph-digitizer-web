@@ -64,3 +64,38 @@ test('display bounds reject empty/nonfinite, equal, reversed and overflowing ran
   assert.throws(()=>resolvePlotBounds([],{y:{mode:'manual',min:NaN,max:0,zero:true}}),/y軸/);
   assert.equal(resolvePlotBounds([],{y:{mode:'manual',min:NaN,max:2,zero:true}}).ymin,0);
 });
+
+import {resampleCurve,validateSampling} from '../docs/js/resample.js';
+test('local linear sampling reduces quantization error and preserves fractional CSV values',()=>{
+  for(const slope of [.12,.37]){
+    const truth=x=>20+slope*x,raw=Array.from({length:201},(_,x)=>[x,Math.round(truth(x))]);
+    const saved=JSON.stringify(raw),smooth=resampleCurve(raw,{smoothing:7});
+    const rmse=points=>Math.sqrt(points.reduce((sum,[x,y])=>sum+(y-truth(x))**2,0)/points.length);
+    assert.ok(rmse(smooth)<rmse(raw)*.5,`${slope}: ${rmse(smooth)} vs ${rmse(raw)}`);
+    assert.equal(smooth.length,raw.length);assert.deepEqual(smooth[0],raw[0]);assert.deepEqual(smooth.at(-1),raw.at(-1));
+    assert.ok(smooth.some(([,y])=>!Number.isInteger(y)));
+    assert.deepEqual(parseCSV(makeCSV(smooth)),smooth.map(p=>p.map(n=>Number(n.toPrecision(12)))));
+    assert.equal(JSON.stringify(raw),saved);
+  }
+});
+test('sampling retains endpoints and straight trends, and never smooths across missing columns',()=>{
+  const points=[...Array.from({length:5},(_,x)=>[x,2*x]),...Array.from({length:5},(_,i)=>[10+i,100+2*i])];
+  assert.deepEqual(resampleCurve(points,{smoothing:51}),points);
+  assert.deepEqual(resampleCurve(points,{smoothing:7,sampleStep:3}),[points[0],points[3],points[4],points[5],points[8],points[9]]);
+  assert.deepEqual(resampleCurve([],{smoothing:7}),[]);
+  assert.deepEqual(resampleCurve([[2,3]],{smoothing:7}),[[2,3]]);
+  const peak=[[0,0],[1,0],[2,5],[3,0],[4,0]];
+  assert.deepEqual(resampleCurve(peak),peak);
+  const fitted=resampleCurve(peak,{smoothing:7});assert.ok(fitted.every(([,y])=>y>=0&&y<=5));
+});
+test('extraction applies sampling settings per curve and keeps graph order for reversed calibration',()=>{
+  const sample=image({dashed:true}),raw=extractCurves(sample)[0].points;
+  const smoothed=extractCurves({...sample,smoothing:7,sampleStep:3})[0].points;
+  assert.deepEqual(smoothed,resampleCurve(raw,{smoothing:7,sampleStep:3}));
+  const available=new Set(raw.map(([x])=>x));assert.ok(smoothed.every(([x])=>available.has(x)));
+  const refs={...references,x_min:references.x_max,x_max:references.x_min};
+  const reversed=extractCurves({...sample,references:refs,smoothing:7,sampleStep:3})[0].points;
+  assert.deepEqual(reversed,[...smoothed].reverse());
+  for(const smoothing of [NaN,2,4,53,-1])assert.throws(()=>validateSampling({smoothing}),/平滑化/);
+  for(const sampleStep of [NaN,0,1.5,101])assert.throws(()=>validateSampling({sampleStep}),/出力間隔/);
+});

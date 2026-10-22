@@ -1,3 +1,4 @@
+import {resampleCurve,validateSampling} from './resample.js';
 import {validateCalibration,toGraph} from './core.js';
 
 function otsu(histogram,total) {
@@ -74,8 +75,9 @@ function components(mask,w,h) {
 
 // Input: RGBA bytes, image dimensions in px, calibration, gap in px.
 // Output: candidates with source [u,v] px points; no points are invented in missing columns.
-export function extractCurves({data,width,height,references,values,gap=12}) {
+export function extractCurves({data,width,height,references,values,gap=12,smoothing=0,sampleStep=1}) {
   validateCalibration(references,values);
+  validateSampling({smoothing,sampleStep});
   if(!Number.isInteger(gap)||gap<0||gap>100)throw new Error('接続距離は0～100 pxの整数で指定する必要がある。');
   const [x0,x1]=[references.x_min[0],references.x_max[0]].sort((a,b)=>a-b);
   const [y0,y1]=[references.y_min[1],references.y_max[1]].sort((a,b)=>a-b);
@@ -110,11 +112,12 @@ export function extractCurves({data,width,height,references,values,gap=12}) {
     }
     for(const group of groups.values()) {
       const span=group.max-group.min+1;if(group.count<20||span<Math.max(12,Math.floor(w*.05)))continue;
-      const points=[];
+      const rawPoints=[];
       for(const [x,rows] of group.columns) {
         const middle=Math.floor(rows.length/2),y=rows.length%2?rows[middle]:(rows[middle-1]+rows[middle])/2;
-        points.push([left+x,top+y]);
+        rawPoints.push([left+x,top+y]);
       }
+      const points=resampleCurve(rawPoints,{smoothing,sampleStep});
       points.sort((a,b)=>toGraph(a,references,values)[0]-toGraph(b,references,values)[0]);
       candidates.push({name:`${names[color]} / ${span} px / ${points.length} 点`,points,span});
     }

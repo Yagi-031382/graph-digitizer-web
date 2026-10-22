@@ -80,6 +80,28 @@ const root=path.resolve(__dirname,'../docs');
     await page.waitForFunction(()=>document.getElementById('pointRows').rows.length>150,{timeout:15000});
     assert.ok(await page.locator('#candidate option').count()>=1);
     const automaticDownload=page.waitForEvent('download');await page.locator('#saveCSV').click();const autoCSV=await fs.readFile(await (await automaticDownload).path(),'utf8');
+    const sampledRows=async()=>page.locator('#pointRows tr').evaluateAll(rows=>rows.map(row=>[Number(row.cells[1].textContent),Number(row.cells[2].textContent)]));
+    const smoothPoints=await sampledRows();
+    assert.equal(await page.locator('#samplingMode').inputValue(),'smooth');
+    async function detectAndWait(){await page.locator('#detect').click();await page.waitForFunction(()=>!document.getElementById('detect').disabled);}
+    await page.locator('#samplingMode').selectOption('raw');assert.ok(await page.locator('#smoothing').isDisabled());
+    assert.equal(await page.locator('#candidate').inputValue(),'');await detectAndWait();
+    const rawPoints=await sampledRows();assert.equal(rawPoints.length,smoothPoints.length);
+    assert.ok(rawPoints.some((p,i)=>Math.abs(p[1]-smoothPoints[i][1])>1e-4));
+    const expectedSmooth=await page.evaluate(async raw=>(await import('./js/resample.js')).resampleCurve(raw,{smoothing:7}),rawPoints);
+    for(let i=0;i<smoothPoints.length;i++)assert.ok(Math.abs(smoothPoints[i][1]-expectedSmooth[i][1])<1e-7);
+    await page.locator('#sampleStep').fill('3');await detectAndWait();
+    const sparsePoints=await sampledRows();assert.ok(sparsePoints.length<rawPoints.length);
+    assert.deepEqual(sparsePoints,await page.evaluate(async raw=>(await import('./js/resample.js')).resampleCurve(raw,{sampleStep:3}),rawPoints));
+    await page.locator('#samplingMode').selectOption('smooth');
+    for(const invalid of ['', '0','4','53']){
+      await page.locator('#smoothing').fill(invalid);await detectAndWait();
+      assert.match(await page.locator('#status').textContent(),/平滑化幅/);assert.deepEqual(await sampledRows(),sparsePoints);
+    }
+    await page.locator('#smoothing').fill('7');await page.locator('#sampleStep').fill('0');await detectAndWait();
+    assert.match(await page.locator('#status').textContent(),/出力間隔/);
+    await page.locator('#sampleStep').fill('1');await detectAndWait();assert.deepEqual(await sampledRows(),smoothPoints);
+    await page.screenshot({path:path.resolve(__dirname,'../test-results-sampling.png'),fullPage:true});
     await page.locator('#clickMode').selectOption('axes');
     await page.locator('#axis-x_min').focus();await page.keyboard.press('ArrowRight');
     assert.equal(await page.locator('#candidate option').count(),1);assert.equal(await page.locator('#candidate').inputValue(),'');
@@ -167,6 +189,6 @@ const root=path.resolve(__dirname,'../docs');
     await page.setViewportSize({width:390,height:844});await page.locator('#compareTab').click();await page.waitForTimeout(100);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:path.resolve(__dirname,'../test-results-mobile.png'),fullPage:true});
-    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, draggable calibration lines, intersection coordinates, keyboard adjustment, recalibration after zoom, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout, keyboard entry from automatic mode, manual/automatic axis bounds, zero toggles, validation, clipping, custom units.');
+    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, draggable calibration lines, intersection coordinates, keyboard adjustment, recalibration after zoom, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout, keyboard entry from automatic mode, manual/automatic axis bounds, zero toggles, validation, clipping, custom units, smoothed extraction, raw fallback, output spacing, sampling validation.');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

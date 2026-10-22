@@ -36,6 +36,12 @@
       <label class="candidate">検出候補<select id="candidate"><option value="">未検出</option></select></label>
       <button id="applyCandidate">選択候補を取得点に反映</button>
     </div>
+    <div class="controls">
+      <label>抽出点の処理<select id="samplingMode"><option value="smooth">段差を抑える</option><option value="raw">元の抽出点</option></select></label>
+      <label>平滑化幅 [px]<input id="smoothing" type="number" min="3" max="51" step="2" value="7"></label>
+      <label>出力間隔 [px]<input id="sampleStep" type="number" min="1" max="100" step="1" value="1"></label>
+    </div>
+    <p class="units">平滑化は画像の画素による段差を抑える近似処理。幅を広げると鋭いピークや折れ曲がりも変化するため、元画像と比較する。設定変更後は再抽出する。読込済みのCSVには適用しない。</p>
     <p class="units">画像上の縦線2本（x最小・x最大）と横線2本（y最小・y最大）をドラッグして、対応する目盛に合わせる。線の交点を基準座標に使用する。矢印キーで1 px、Shift＋矢印で10 px移動できる。点を取得するときは「画像の操作」を切り替える。</p>
     <p class="units">px：元画像の画素の位置・距離。%：元の試料長に対する変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。</p>
     <div class="workspace">

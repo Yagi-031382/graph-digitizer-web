@@ -1,3 +1,4 @@
+import {validateSampling} from './resample.js';
 import {keys,validateCalibration,toGraph,parseCSV,makeCSV} from './core.js';
 import {drawPlot,curveColor} from './plot.js';
 const $=id=>document.getElementById(id);
@@ -125,6 +126,11 @@ $('imageCanvas').addEventListener('click',event=>{
 keys.forEach(key=>$(key).addEventListener('input',()=>{invalidate();state.dirty=state.dirty||!!state.points.length;refresh();try{calibration();status('軸値を更新した。取得点の座標を再計算した。');}catch(error){status(error.message,true);}}));
 for(const id of ['xLabel','yLabel'])$(id).addEventListener('input',refresh);
 $('gap').addEventListener('input',invalidate);
+function samplingSettings(){
+  return {smoothing:$('samplingMode').value==='smooth'?(Number($('smoothing').value)||NaN):0,sampleStep:Number($('sampleStep').value)};
+}
+$('samplingMode').addEventListener('change',()=>{$('smoothing').disabled=$('samplingMode').value==='raw';invalidate();});
+for(const id of ['smoothing','sampleStep'])$(id).addEventListener('input',invalidate);
 $('fitImage').onclick=fit;$('zoomIn').onclick=()=>setZoom(state.zoom*1.2);$('zoomOut').onclick=()=>setZoom(state.zoom/1.2);
 $('imageViewport').addEventListener('wheel',event=>{
   if(!state.image)return;event.preventDefault();
@@ -152,6 +158,7 @@ $('applyCandidate').onclick=applyCandidate;
 $('detect').onclick=()=>{
   try {
     const v=calibration();if(!state.source)throw new Error('画像を読み込む必要がある。');
+    const sampling=samplingSettings();validateSampling(sampling);
     const gap=Number($('gap').value);if($('gap').value===''||!Number.isInteger(gap)||gap<0||gap>100)throw new Error('接続距離は0～100 pxの整数で指定する必要がある。');
     if(state.busy)return;
     if(!worker) {
@@ -168,7 +175,7 @@ $('detect').onclick=()=>{
       worker.onerror=()=>{state.busy=false;$('detect').disabled=false;worker.terminate();worker=null;status('自動検出を実行できなかった。HTTP/HTTPSで開き、対応ブラウザーを確認する必要がある。',true);};
     }
     state.busy=true;$('detect').disabled=true;jobRevision=state.revision;jobId++;status('曲線を検出している…');
-    const copy=state.source.data.slice();worker.postMessage({id:jobId,data:copy,width:state.source.width,height:state.source.height,references:state.references,values:v,gap},[copy.buffer]);
+    const copy=state.source.data.slice();worker.postMessage({id:jobId,data:copy,width:state.source.width,height:state.source.height,references:state.references,values:v,gap,...sampling},[copy.buffer]);
   }catch(error){status(error.message,true);}
 };
 
