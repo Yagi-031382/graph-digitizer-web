@@ -1,4 +1,3 @@
-import {samplingGrid} from './sampling-grid.js';
 import {keys,validateCalibration,toGraph,parseCSV,makeCSV} from './core.js';
 import {drawPlot,curveColor} from './plot.js';
 const $=id=>document.getElementById(id);
@@ -15,39 +14,11 @@ function renderImage(){
   if(!state.image)return;
   const canvas=$('imageCanvas'),ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(state.image,0,0);
-  renderSamplingGrid(ctx);
   const radius=4/state.zoom;ctx.font=`${12/state.zoom}px system-ui`;ctx.lineWidth=1/state.zoom;
   function point([u,v],label,color){ctx.fillStyle=color;ctx.beginPath();ctx.arc(u,v,radius,0,Math.PI*2);ctx.fill();if(label)ctx.fillText(label,u+6/state.zoom,v-6/state.zoom);}
   renderAxes();
   state.points.forEach((p,index)=>point(p,state.points.length<=80?String(index+1):'','#d500b5'));
 }
-function gridSettings(){
-  return {mode:$('extractionMode').value,stepX:Number($('gridStepX').value),stepY:Number($('gridStepY').value)};
-}
-function renderSamplingGrid(ctx){
-  $('gridError').hidden=true;
-  if($('extractionMode').value!=='grid')return;
-  try{
-    const {xs,ys,origin}=samplingGrid({...gridSettings(),width:state.source.width,height:state.source.height,references:state.references});
-    if(!$('gridPreview').checked)return;
-    ctx.save();ctx.lineWidth=1/state.zoom;ctx.strokeStyle='rgba(0,140,100,.5)';ctx.setLineDash([3/state.zoom,3/state.zoom]);ctx.beginPath();
-    if(xs.length&&ys.length){
-      const left=Math.min(state.axes.x_min,state.axes.x_max),right=Math.max(state.axes.x_min,state.axes.x_max),top=Math.min(state.axes.y_min,state.axes.y_max),bottom=Math.max(state.axes.y_min,state.axes.y_max);
-      for(const x of xs){ctx.moveTo(x,top);ctx.lineTo(x,bottom);}
-      for(const y of ys){ctx.moveTo(left,y);ctx.lineTo(right,y);}
-    }
-    ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#008c64';ctx.beginPath();ctx.arc(...origin,4/state.zoom,0,Math.PI*2);ctx.fill();ctx.restore();
-  }catch(error){$('gridError').textContent=error.message;$('gridError').hidden=false;}
-}
-function updateExtractionMode(){
-  const grid=$('extractionMode').value==='grid';
-  $('gridControls').hidden=!grid;$('gridHelp').hidden=!grid;$('gap').disabled=grid;
-  $('detect').textContent=grid?'格子でサンプリング':'曲線を自動検出';invalidate();renderImage();
-}
-$('extractionMode').addEventListener('change',updateExtractionMode);
-for(const id of ['gridStepX','gridStepY'])$(id).addEventListener('input',()=>{invalidate();renderImage();});
-$('gridPreview').addEventListener('change',renderImage);
-
 function renderTable(){
   const graph=graphPoints(),fragment=document.createDocumentFragment();
   state.points.forEach(([u,v],index)=>{
@@ -181,9 +152,7 @@ $('applyCandidate').onclick=applyCandidate;
 $('detect').onclick=()=>{
   try {
     const v=calibration();if(!state.source)throw new Error('画像を読み込む必要がある。');
-    const settings=gridSettings();
-    if(settings.mode==='grid')samplingGrid({...settings,width:state.source.width,height:state.source.height,references:state.references});
-    const gap=Number($('gap').value);if(settings.mode==='auto'&&($('gap').value===''||!Number.isInteger(gap)||gap<0||gap>100))throw new Error('接続距離は0～100 pxの整数で指定する必要がある。');
+    const gap=Number($('gap').value);if($('gap').value===''||!Number.isInteger(gap)||gap<0||gap>100)throw new Error('接続距離は0～100 pxの整数で指定する必要がある。');
     if(state.busy)return;
     if(!worker) {
       worker=new Worker(new URL('./extraction-worker.js',import.meta.url),{type:'module'});
@@ -192,14 +161,14 @@ $('detect').onclick=()=>{
         if(jobRevision!==state.revision){status('画像または軸の設定が変わったため、検出結果を破棄した。再度検出する必要がある。');return;}
         if(data.error){status(data.error,true);return;}
         state.candidates=data.candidates;$('candidate').replaceChildren();
-        if(!state.candidates.length){$('candidate').append(new Option('候補なし',''));status('候補が見つからなかった。格子間隔・接続距離・基準点を確認し、手動取得も利用できる。',true);return;}
+        if(!state.candidates.length){$('candidate').append(new Option('候補なし',''));status('候補が見つからなかった。接続距離や基準点を確認し、手動取得も利用できる。',true);return;}
         state.candidates.forEach((candidate,index)=>$('candidate').append(new Option(candidate.name,index)));
         status(`${state.candidates.length} 候補を検出した。`);applyCandidate();
       };
       worker.onerror=()=>{state.busy=false;$('detect').disabled=false;worker.terminate();worker=null;status('自動検出を実行できなかった。HTTP/HTTPSで開き、対応ブラウザーを確認する必要がある。',true);};
     }
     state.busy=true;$('detect').disabled=true;jobRevision=state.revision;jobId++;status('曲線を検出している…');
-    const copy=state.source.data.slice();worker.postMessage({id:jobId,data:copy,width:state.source.width,height:state.source.height,references:state.references,values:v,gap,...settings},[copy.buffer]);
+    const copy=state.source.data.slice();worker.postMessage({id:jobId,data:copy,width:state.source.width,height:state.source.height,references:state.references,values:v,gap},[copy.buffer]);
   }catch(error){status(error.message,true);}
 };
 

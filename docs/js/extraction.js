@@ -1,4 +1,3 @@
-import {samplingGrid} from './sampling-grid.js';
 import {validateCalibration,toGraph} from './core.js';
 
 function otsu(histogram,total) {
@@ -75,16 +74,14 @@ function components(mask,w,h) {
 
 // Input: RGBA bytes, image dimensions in px, calibration, gap in px.
 // Output: candidates with source [u,v] px points; no points are invented in missing columns.
-export function extractCurves({data,width,height,references,values,gap=12,mode='auto',stepX=10,stepY=10}) {
+export function extractCurves({data,width,height,references,values,gap=12}) {
   validateCalibration(references,values);
-  if(!['auto','grid'].includes(mode))throw new Error('抽出方式を確認する必要がある。');
-  const grid=mode==='grid'?samplingGrid({width,height,references,stepX,stepY}):null;
-  if(!grid&&(!Number.isInteger(gap)||gap<0||gap>100))throw new Error('接続距離は0～100 pxの整数で指定する必要がある。');
+  if(!Number.isInteger(gap)||gap<0||gap>100)throw new Error('接続距離は0～100 pxの整数で指定する必要がある。');
   const [x0,x1]=[references.x_min[0],references.x_max[0]].sort((a,b)=>a-b);
   const [y0,y1]=[references.y_min[1],references.y_max[1]].sort((a,b)=>a-b);
-  const left=Math.max(0,grid?Math.round(x0):Math.ceil(x0)+3),right=Math.min(width,grid?Math.round(x1)+1:Math.floor(x1)-2);
-  const top=Math.max(0,grid?Math.round(y0):Math.ceil(y0)+3),bottom=Math.min(height,grid?Math.round(y1)+1:Math.floor(y1)-2);
-  const w=right-left,h=bottom-top;if(w<(grid?1:10)||h<(grid?1:10))throw new Error('抽出範囲が不足している。軸の基準点を確認する必要がある。');
+  const left=Math.max(0,Math.ceil(x0)+3),right=Math.min(width,Math.floor(x1)-2);
+  const top=Math.max(0,Math.ceil(y0)+3),bottom=Math.min(height,Math.floor(y1)-2);
+  const w=right-left,h=bottom-top;if(w<10||h<10)throw new Error('抽出範囲が不足している。軸の基準点を確認する必要がある。');
   const n=w*h,gray=new Uint8Array(n),kind=new Uint8Array(n),histogram=new Uint32Array(256);
   for(let y=0;y<h;y++)for(let x=0;x<w;x++) {
     const i=y*w+x,offset=((y+top)*width+x+left)*4;
@@ -102,19 +99,7 @@ export function extractCurves({data,width,height,references,values,gap=12,mode='
     let mask=new Uint8Array(n),present=false;
     for(let i=0;i<n;i++)if(kind[i]===color&&gray[i]<=(color===0?threshold:244)){mask[i]=1;present=true;}
     if(!present)continue;
-    const originIndex=grid?(Math.round(grid.origin[1])-top)*w+Math.round(grid.origin[0])-left:-1;
-    const originPresent=grid&&grid.xs.includes(grid.origin[0])&&grid.ys.includes(grid.origin[1])&&!!mask[originIndex];
     if(color===0)mask=removeGrid(mask,w,h);
-    if(grid){
-      const points=[];
-      for(const u of grid.xs)for(const v of grid.ys){
-        const index=(Math.round(v)-top)*w+Math.round(u)-left;
-        if(mask[index]||(originPresent&&u===grid.origin[0]&&v===grid.origin[1]))points.push([u,v]);
-      }
-      points.sort((a,b)=>toGraph(a,references,values)[0]-toGraph(b,references,values)[0]||toGraph(a,references,values)[1]-toGraph(b,references,values)[1]);
-      if(points.length){const span=Math.abs(points.at(-1)[0]-points[0][0]);candidates.push({name:`${names[color]} / 格子 / ${points.length} 点`,points,span});}
-      continue;
-    }
     const labels=components(dilate(mask,w,h,gap),w,h),groups=new Map();
     for(let y=0;y<h;y++)for(let x=0;x<w;x++) {
       const i=y*w+x;if(!mask[i])continue;

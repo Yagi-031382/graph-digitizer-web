@@ -167,46 +167,6 @@ const root=path.resolve(__dirname,'../docs');
     await page.setViewportSize({width:390,height:844});await page.locator('#compareTab').click();await page.waitForTimeout(100);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:path.resolve(__dirname,'../test-results-mobile.png'),fullPage:true});
-    await page.setViewportSize({width:1440,height:1000});await page.locator('#acquireTab').click();
-    const gridImage=await page.evaluate(()=>{
-      const c=document.createElement('canvas');c.width=640;c.height=480;const ctx=c.getContext('2d');
-      ctx.fillStyle='white';ctx.fillRect(0,0,640,480);ctx.strokeStyle='red';ctx.lineWidth=3;
-      ctx.beginPath();ctx.moveTo(58,422);ctx.lineTo(422,58);ctx.stroke();
-      return c.toDataURL('image/png').split(',')[1];
-    });
-    await page.locator('#imageFile').setInputFiles({name:'格子検証.png',mimeType:'image/png',buffer:Buffer.from(gridImage,'base64')});
-    await page.waitForFunction(()=>document.getElementById('imageName').textContent==='格子検証.png');
-    for(const [key,target] of [['x_min',60],['x_max',580],['y_min',420],['y_max',50]])await dragAxis(key,target);
-    await page.locator('#extractionMode').selectOption('grid');
-    assert.ok(await page.locator('#gridControls').isVisible());assert.ok(await page.locator('#gap').isDisabled());
-    await page.locator('#gridStepX').fill('20');await page.locator('#gridStepY').fill('20');
-    const preview=await page.locator('#imageCanvas').evaluate(c=>c.toDataURL());
-    await page.locator('#gridPreview').uncheck();
-    assert.notEqual(await page.locator('#imageCanvas').evaluate(c=>c.toDataURL()),preview);
-    await page.locator('#gridPreview').check();await page.locator('#zoomIn').click();
-    await page.locator('#detect').click();
-    await page.waitForFunction(()=>!document.getElementById('detect').disabled);
-    assert.equal(await page.locator('#pointRows tr').count(),19,await page.locator('#status').textContent()+' / '+await page.locator('#candidate').textContent());
-    const gridRows=await page.locator('#pointRows tr').evaluateAll(rows=>rows.map(row=>[...row.cells].slice(1).map(c=>Number(c.textContent))));
-    assert.ok(gridRows.some(([u,v,x,y])=>Math.abs(u-60)<.05&&Math.abs(v-420)<.05&&Math.abs(x)<1e-8&&Math.abs(y)<1e-8));
-    for(const [u,v] of gridRows){assert.ok(Math.abs((u-60)/20-Math.round((u-60)/20))<.01);assert.ok(Math.abs((420-v)/20-Math.round((420-v)/20))<.01);}
-    assert.match(await page.locator('#candidate option').first().textContent(),/赤.*格子/);
-    const gridDownload=page.waitForEvent('download');await page.locator('#saveCSV').click();
-    const gridCSV=await fs.readFile(await (await gridDownload).path(),'utf8');assert.ok(gridCSV.startsWith('\uFEFFx,y'));assert.equal(gridCSV.trim().split('\n').length,20);
-    await page.locator('#gridStepX').fill('');assert.ok(await page.locator('#gridError').isVisible());
-    assert.equal(await page.locator('#candidate').inputValue(),'');
-    await page.locator('#detect').click();assert.ok(await page.locator('#status').evaluate(n=>n.classList.contains('error')));
-    await page.locator('#gridStepX').fill('10');assert.ok(await page.locator('#gridError').isHidden());
-    await page.locator('#detect').click();await page.waitForFunction(()=>!document.getElementById('detect').disabled&&document.getElementById('pointRows').rows.length===19);
-    // Horizontal spacing 10 and vertical spacing 20 still sample only their shared red intersections.
-    await page.locator('#gridStepY').fill('10');await page.locator('#detect').click();
-    await page.waitForFunction(()=>!document.getElementById('detect').disabled&&document.getElementById('pointRows').rows.length===37);
-    await page.locator('#fitImage').click();
-    await page.screenshot({path:path.resolve(__dirname,'../test-results-grid.png'),fullPage:true});
-    await page.setViewportSize({width:390,height:844});
-    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-    await page.locator('#extractionMode').selectOption('auto');
-    assert.ok(await page.locator('#gridControls').isHidden());assert.ok(await page.locator('#gap').isEnabled());
-    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, draggable calibration lines, intersection coordinates, keyboard adjustment, recalibration after zoom, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout, keyboard entry from automatic mode, manual/automatic axis bounds, zero toggles, validation, clipping, custom units, grid preview, origin sampling, independent grid spacing, grid CSV, grid validation.');
+    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, draggable calibration lines, intersection coordinates, keyboard adjustment, recalibration after zoom, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout, keyboard entry from automatic mode, manual/automatic axis bounds, zero toggles, validation, clipping, custom units.');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
