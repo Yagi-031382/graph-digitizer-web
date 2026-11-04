@@ -13,6 +13,7 @@
   <nav class="tabs" role="tablist" aria-label="作業モード">
     <button id="acquireTab" class="active" role="tab" aria-selected="true" aria-controls="acquire">CSV取得</button>
     <button id="compareTab" role="tab" aria-selected="false" aria-controls="compare">CSV描画</button>
+    <button id="overlayTab" role="tab" aria-selected="false" aria-controls="overlay">画像重ね合わせ</button>
   </nav>
   <section id="acquire" role="tabpanel" aria-labelledby="acquireTab">
     <div class="toolbar">
@@ -76,6 +77,31 @@
     <p id="rangeError" class="status error" role="alert" hidden></p>
     <p class="units">単位の換算は行わない。各CSVの単位とひずみ・応力の定義をそろえて比較する。%：元の試料長に対する変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。</p>
     <div class="compare-workspace"><aside class="panel"><div class="panel-heading"><h2>読み込んだCSV</h2></div><p id="csvEmpty" class="empty">比較するCSVを追加する。</p><ul id="curveList"></ul></aside><article class="panel compare-plot-panel"><div class="panel-heading"><h2>曲線の比較</h2><span id="curveCount">0 曲線</span></div><div class="plot-wrap"><canvas id="comparePlot" aria-label="CSV曲線の比較グラフ"></canvas></div><div id="legend" class="legend"></div></article></div>
+  </section>
+  <section id="overlay" role="tabpanel" aria-labelledby="overlayTab" hidden>
+    <div class="toolbar"><label class="button primary" for="overlayFiles">透過画像を追加（複数選択可）</label><input class="file-input" id="overlayFiles" type="file" accept="image/png,image/webp" multiple></div>
+    <p class="units">目盛と曲線以外を透過したPNG・WebPを用意する。背景除去は行わない。画像を選び、縦線2本（x最小・x最大）と横線2本（y最小・y最大）を対応する目盛にドラッグする。矢印キーで1 px、Shift併用で10 px動かせる。各画像の単位をそろえて比較する。</p>
+    <ul id="overlayList" class="overlay-list" aria-label="重ね合わせる画像"></ul>
+    <div class="controls"><label>共通x軸名・単位<input id="overlayXLabel" value="Strain [%]"></label><label>共通y軸名・単位<input id="overlayYLabel" value="Stress [MPa]"></label></div>
+    <div class="overlay-workspace">
+      <article class="panel">
+        <div class="panel-heading"><h2>選択画像の校正</h2><span id="overlaySelected">画像を追加する</span></div>
+        <fieldset id="overlayCalibration" disabled>
+          <div class="calibration">
+            <label>x最小値<input id="overlayXMin" type="number" step="any" value="0"></label>
+            <label>x最大値<input id="overlayXMax" type="number" step="any" value="100"></label>
+            <label>y最小値<input id="overlayYMin" type="number" step="any" value="0"></label>
+            <label>y最大値<input id="overlayYMax" type="number" step="any" value="1"></label>
+          </div>
+          <div class="controls"><label>不透明度<input id="overlayOpacity" type="range" min="0" max="100" value="100"><output id="overlayOpacityValue">100 %</output></label><button id="overlayZoomOut" type="button" aria-label="選択画像を縮小">−</button><button id="overlayZoomIn" type="button" aria-label="選択画像を拡大">＋</button><button id="overlayFit" type="button">全体表示</button></div>
+        </fieldset>
+        <div id="overlayViewport" class="checkerboard"><div id="overlayStage" hidden><canvas id="overlaySource" aria-label="校正する透過画像"></canvas><button type="button" id="overlay-axis-x_min" class="calibration-line vertical" aria-label="重ね合わせ画像のx最小校正線"><span>x最小</span></button><button type="button" id="overlay-axis-x_max" class="calibration-line vertical" aria-label="重ね合わせ画像のx最大校正線"><span>x最大</span></button><button type="button" id="overlay-axis-y_min" class="calibration-line horizontal" aria-label="重ね合わせ画像のy最小校正線"><span>y最小</span></button><button type="button" id="overlay-axis-y_max" class="calibration-line horizontal" aria-label="重ね合わせ画像のy最大校正線"><span>y最大</span></button></div></div>
+        <p id="overlayCoordinates" class="units overlay-note">最小交点：(x最小, y最小)、最大交点：(x最大, y最大)</p>
+      </article>
+      <article class="panel overlay-result"><div class="panel-heading"><h2>共通スケールで重ね合わせ</h2><span id="overlayCount">0 画像</span></div><div class="plot-wrap"><canvas id="overlayPlot" aria-label="校正済み画像の重ね合わせ"></canvas></div></article>
+    </div>
+    <p id="overlayError" class="status error" role="alert" hidden></p>
+    <p class="units">共通の範囲は表示中の画像の軸値全体に合わせる。各画像の校正範囲内を表示し、横・縦を独立して拡大縮小する。線形・水平／垂直な軸に対応し、回転・対数軸・単位換算には対応しない。%：元の試料長に対する変形量の百分率。MPa：応力、1 MPa = 10⁶ N/m²。再読み込みで画像と校正設定は失われる。</p>
   </section>
   <p id="status" class="status" role="status" aria-live="polite">画像読込後、軸値を入力し、4本の校正線を対応する目盛位置に合わせる。</p>
   <details class="help"><summary>使い方・抽出条件</summary><p>両軸が線形目盛の画像を対象とする。4本の校正線は文字ではなく、対応する目盛の位置に合わせる。x最小線とy最小線の交点が最小値の基準、x最大線とy最小線の交点がx最大、x最小線とy最大線の交点がy最大の基準になる。画像はホイールまたは＋／−で拡大・縮小できる。拡大後はスクロールで移動する。</p><p>自動検出は白背景の線を対象とする。候補は元画像と照合してから保存する。同色の交差線、文字や誤差棒が接触する線は混ざる場合がある。途切れた区間には点を生成しないが、再描画では取得点を直線で結ぶ。欠損区間の測定値を復元したことにはならない。</p><p>CSVはx,y列、UTF-8 BOM付きで保存する。行順を保持し、CSVに単位や校正情報は含めない。CSV描画での点表示は初期状態でOFFである。再読み込みやタブを閉じる前にCSVを保存する。</p></details>

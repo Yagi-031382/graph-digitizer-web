@@ -189,6 +189,7 @@ const root=path.resolve(__dirname,'../docs');
     await page.setViewportSize({width:390,height:844});await page.locator('#compareTab').click();await page.waitForTimeout(100);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:path.resolve(__dirname,'../test-results-mobile.png'),fullPage:true});
-    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, draggable calibration lines, intersection coordinates, keyboard adjustment, recalibration after zoom, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout, keyboard entry from automatic mode, manual/automatic axis bounds, zero toggles, validation, clipping, custom units, smoothed extraction, raw fallback, output spacing, sampling validation.');
+    await require('./overlay-browser.cjs')(page);
+    assert.deepEqual(errors,[]);console.log('Browser checks passed: image, draggable calibration lines, intersection coordinates, keyboard adjustment, recalibration after zoom, zoom, selected orange point, CSV, auto extraction, comparison, toggle, invalid CSV, responsive layout, keyboard entry from automatic mode, manual/automatic axis bounds, zero toggles, validation, clipping, custom units, smoothed extraction, raw fallback, output spacing, sampling validation, calibrated transparent image overlay.');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

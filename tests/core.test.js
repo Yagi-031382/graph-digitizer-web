@@ -99,3 +99,25 @@ test('extraction applies sampling settings per curve and keeps graph order for r
   for(const smoothing of [NaN,2,4,53,-1])assert.throws(()=>validateSampling({smoothing}),/平滑化/);
   for(const sampleStep of [NaN,0,1.5,101])assert.throws(()=>validateSampling({sampleStep}),/出力間隔/);
 });
+
+import {validateLayer,overlayBounds,layerTransform} from '../docs/js/overlay-core.js';
+test('image overlay aligns different resolutions and aspect ratios to the same graph scale',()=>{
+  const values={x_min:0,x_max:100,y_min:0,y_max:1};
+  const a={name:'a',min:[20,140],max:[180,20],values},b={name:'b',min:[40,180],max:[360,20],values};
+  const map=([x,y])=>[50+x*5,400-y*300];
+  const transform=(layer,p)=>{const t=layerTransform(layer,map);return [t.sx*p[0]+t.tx,t.sy*p[1]+t.ty];};
+  assert.deepEqual(transform(a,[60,80]),map([25,.5]));
+  assert.deepEqual(transform(b,[120,100]),map([25,.5]));
+  assert.deepEqual(transform(a,a.min),map([0,0]));assert.deepEqual(transform(b,b.max),map([100,1]));
+  const reversed={...a,min:a.max,max:a.min};assert.deepEqual(transform(reversed,reversed.min),map([0,0]));
+  assert.deepEqual(overlayBounds([a,b]),{xmin:0,xmax:100,ymin:0,ymax:1});
+  assert.deepEqual(overlayBounds([a,{...b,values:{x_min:-10,x_max:200,y_min:-1,y_max:2}}]),{xmin:-10,xmax:200,ymin:-1,ymax:2});
+  assert.deepEqual(overlayBounds([]),{xmin:0,xmax:1,ymin:0,ymax:1});
+});
+test('image overlay rejects invalid axis limits and coincident calibration lines',()=>{
+  const layer={name:'invalid.png',min:[20,140],max:[180,20],values:{x_min:0,x_max:100,y_min:0,y_max:1}};
+  for(const values of [{...layer.values,x_min:NaN},{...layer.values,y_max:Infinity},{...layer.values,x_max:0},{...layer.values,y_min:1}])
+    assert.throws(()=>overlayBounds([{...layer,values}]),/invalid.png/);
+  assert.throws(()=>validateLayer({...layer,max:[20,20]}),/異なる/);
+  assert.throws(()=>validateLayer({...layer,max:[180,140]}),/異なる/);
+});

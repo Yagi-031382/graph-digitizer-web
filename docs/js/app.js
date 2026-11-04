@@ -1,3 +1,4 @@
+import {initOverlay,renderOverlay} from './overlay.js';
 import {validateSampling} from './resample.js';
 import {keys,validateCalibration,toGraph,parseCSV,makeCSV} from './core.js';
 import {drawPlot,curveColor} from './plot.js';
@@ -231,11 +232,15 @@ $('csvFiles').addEventListener('change',async event=>{
 });
 for(const id of ['showPoints','compareX','compareY'])$(id).addEventListener(id==='showPoints'?'change':'input',renderComparison);
 function switchMode(mode){
-  const comparison=mode==='compare';$('acquire').hidden=comparison;$('compare').hidden=!comparison;
-  for(const [id,active]of [['acquireTab',!comparison],['compareTab',comparison]]){$(id).classList.toggle('active',active);$(id).setAttribute('aria-selected',String(active));}
-  if(comparison){renderComparison();status('CSVを読み込み、色と凡例で曲線を比較する。');}else{refresh();status('画像の軸の基準点と取得点は保持されている。');}
+  for(const name of ['acquire','compare','overlay']){
+    const active=name===mode;$(name).hidden=!active;$(name+'Tab').classList.toggle('active',active);$(name+'Tab').setAttribute('aria-selected',String(active));
+  }
+  if(mode==='compare'){renderComparison();status('CSVを読み込み、色と凡例で曲線を比較する。');}
+  else if(mode==='overlay'){renderOverlay();status('透過画像を追加し、各画像の4本の校正線と軸値を設定する。');}
+  else{refresh();status('画像の軸の基準点と取得点は保持されている。');}
 }
-$('acquireTab').onclick=()=>switchMode('acquire');$('compareTab').onclick=()=>switchMode('compare');
+for(const mode of ['acquire','compare','overlay'])$(mode+'Tab').onclick=()=>switchMode(mode);
+initOverlay();
 window.addEventListener('beforeunload',event=>{if(state.dirty){event.preventDefault();event.returnValue='';}});
-let resizing=false;new ResizeObserver(()=>{if(resizing)return;resizing=true;requestAnimationFrame(()=>{renderPlot();renderComparison();resizing=false;});}).observe(document.querySelector('main'));
+let resizing=false;new ResizeObserver(()=>{if(resizing)return;resizing=true;requestAnimationFrame(()=>{renderPlot();renderComparison();renderOverlay();resizing=false;});}).observe(document.querySelector('main'));
 refresh();renderComparison();
