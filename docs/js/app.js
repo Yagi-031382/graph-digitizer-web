@@ -78,6 +78,7 @@ function syncAxisReferences(){
   state.references={x_min:[a.x_min,a.y_min],x_max:[a.x_max,a.y_min],y_min:[a.x_min,a.y_min],y_max:[a.x_min,a.y_max]};
 }
 function renderAxes(){
+  $('manualAcquire').setAttribute('aria-pressed',String($('clickMode').value==='curve'));
   if(!state.axes)return;
   $('axisOverlay').classList.toggle('acquiring',$('clickMode').value==='curve');
   for(const key of keys){
@@ -117,7 +118,15 @@ for(const key of keys){
     event.preventDefault();moveAxis(key,state.axes[key]+(event.key===negative?-1:1)*(event.shiftKey?10:1));
   });
 }
-$('clickMode').addEventListener('change',()=>{renderAxes();status($('clickMode').value==='axes'?'校正線をドラッグして目盛に合わせる。':'曲線上をクリックして点を取得する。');});
+function updateClickMode(){
+  renderAxes();
+  status($('clickMode').value==='axes'?'校正線をドラッグして目盛に合わせる。':'画像上の任意の点をクリックして取得し、「CSV保存」で保存する。');
+}
+$('clickMode').addEventListener('change',updateClickMode);
+$('manualAcquire').onclick=()=>{
+  if(!state.image){status('画像を読み込む必要がある。',true);return;}
+  $('clickMode').value='curve';updateClickMode();
+};
 $('imageCanvas').addEventListener('click',event=>{
   if(!state.image||$('clickMode').value!=='curve')return;
   const rect=event.currentTarget.getBoundingClientRect(),p=[(event.clientX-rect.left)/rect.width*event.currentTarget.width,(event.clientY-rect.top)/rect.height*event.currentTarget.height];
